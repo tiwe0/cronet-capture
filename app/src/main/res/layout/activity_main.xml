@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F5F5">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="转发配置 (Proxy Settings)"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:layout_marginBottom="8dp"
+            android:textColor="#333333"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="12dp"
+            android:elevation="2dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="主机地址 (Host)"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/et_host"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="127.0.0.1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="端口 (Port)"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/et_port"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="9999"
+                android:inputType="number" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="混淆配置 (Obfuscation Settings)"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="8dp"
+            android:textColor="#333333"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="12dp"
+            android:elevation="2dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="UrlRequest 类名"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText android:id="@+id/cls_urlrequest" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="org.chromium.net.UrlRequest" />
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="UrlResponseInfo 类名"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText android:id="@+id/cls_urlresponseinfo" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="org.chromium.net.UrlResponseInfo" />
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="getUrl 方法名"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText android:id="@+id/method_geturl" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="getUrl" />
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ByteBuffer 类名"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText android:id="@+id/cls_bytebuffer" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="java.nio.ByteBuffer" />
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Callback 类名"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText android:id="@+id/cls_callback" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="org.chromium.net.UrlRequest$Callback" />
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="onReadCompleted 方法名"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText android:id="@+id/method_onreadcompleted" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="onReadCompleted" />
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="onSucceeded 方法名"
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText android:id="@+id/method_onsucceeded" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="onSucceeded" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="24dp"
+            android:weightSum="2">
+
+            <Button
+                android:id="@+id/btn_reset"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="重置配置"
+                android:backgroundTint="#FF5722"
+                android:textColor="@android:color/white"/>
+
+            <Button
+                android:id="@+id/btn_save"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="保存配置并同步"
+                android:backgroundTint="#2196F3"
+                android:textColor="@android:color/white"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
