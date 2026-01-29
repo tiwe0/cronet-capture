@@ -36,9 +36,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-
-
         </activity>
+
+        <provider
+            android:name=".ConfigProvider"
+            android:authorities="cafe.ivory.cronet.config"
+            android:exported="true" />
 
     </application>
 

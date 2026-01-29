@@ -2,12 +2,11 @@ package cafe.ivory.cronet;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.content.SharedPreferences;
-import android.widget.EditText;
+import android.net.Uri;
+import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 
-import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -22,10 +21,27 @@ import io.github.libxposed.api.annotations.XposedHooker;
 public class MainModule extends XposedModule {
 
     private static MainModule mainModule;
+    private static String[] configKeys = {
+            "host", "port", "urlRequest", "urlResponseInfo",
+            "getUrl", "byteBuffer", "callback", "onReadCompleted", "onSucceeded"
+    };
 
     // 状态
     public static boolean findTargetClass = false;
     private boolean soLoaded = false;
+
+    // 转发配置
+    public static String host = "127.0.0.1";
+    public static int port = 9000;
+
+    // 混淆类名和字段名
+    public static String callbackClassName = "kj5.g";
+    public static String urlRequestClassName = "org.chromium.net.h0";
+    public static String urlResponseInfoClassName = "org.chromium.net.i0";
+    public static String byteBufferClassName = "java.nio.ByteBuffer";
+    public static String getUrlMethodName = "f";
+    public static String onReadCompletedMethodName = "c";
+    public static String onSucceededMethodName = "f";
 
     // 混淆类的反射缓存
     public static Method getUrl;
@@ -33,27 +49,10 @@ public class MainModule extends XposedModule {
     public static Class<?> UrlResponseInfo;
     public static Class<?> ByteBuffer;
     public static Class<?> Callback;
+
     public native void initTransport(String host, int port);
     public native void sendData(String tag, ByteBuffer byteBuffer, int position);
     public native void endData(String tag);
-
-    private void loadConfigPrefs() {
-        SharedPreferences pref = getRemotePreferences("config");
-        Map<String, ?> allEntries = pref.getAll();
-        if (allEntries.isEmpty()) {
-            log("配置为空xp");
-        } else {
-            log("读取到配置");
-            for (Map.Entry<String, ?> entry : allEntries.entrySet()) {
-                log("key: " + entry.getKey() + "| value: " + entry.getValue().toString());
-            }
-        }
-        for (Map.Entry<String, Integer> entry : MainActivity.EDIT_TEXT_IDS.entrySet()) {
-            String key = entry.getKey();
-            String value = pref.getString(key, "空");
-            log("加载配置: " + key + " = " + value);
-        }
-    }
 
     public MainModule(@NonNull XposedInterface base, @NonNull ModuleLoadedParam param) {
         super(base, param);
@@ -69,7 +68,7 @@ public class MainModule extends XposedModule {
             System.load(path);
             soLoaded = true;
             log("加载 libcronet_forwarder.so 成功");
-            initTransport("127.0.0.1", 9999);
+            initTransport(host, port);
             log("初始化延迟连接成功");
         } catch (Exception e) {
             log("加载 libcronet_forwarder.so 失败: " + e.toString());
@@ -79,8 +78,7 @@ public class MainModule extends XposedModule {
     @Override
     public void onPackageLoaded(@NonNull PackageLoadedParam param) {
         super.onPackageLoaded(param);
-        if (findTargetClass) return;
-        loadConfigPrefs();
+        if (!param.isFirstPackage()) return;
         try {
             Method attachMethod = ClassLoader.getSystemClassLoader()
                     .loadClass("android.content.ContextWrapper")
@@ -108,13 +106,46 @@ public class MainModule extends XposedModule {
             ClassLoader realLoader = theContext.getClassLoader();
             mainModule.log("attachBaseContext出发点，当前包名: " + theContext.getPackageName());
 
-            try {
-                Callback = realLoader.loadClass("kj5.g");
-                mainModule.log("成功找到kj5.g");
+            Uri uri = Uri.parse("content://cafe.ivory.cronet.config");
+            Bundle configBundle = theContext.getContentResolver().call(uri, "getConfig", null, null);
+            if (configBundle != null) {
+                // 更新转发配置
+                host = configBundle.getString("host", host);
+                port = Integer.parseInt(configBundle.getString("port", Integer.toString(port)));
+                mainModule.log("更新转发配置: " + host + ":" + port);
 
-                UrlRequest = realLoader.loadClass("org.chromium.net.h0");
-                UrlResponseInfo = realLoader.loadClass("org.chromium.net.i0");
-                ByteBuffer = realLoader.loadClass("java.nio.ByteBuffer");
+                // 更新混淆类名和方法名
+                callbackClassName = configBundle.getString("callback", callbackClassName);
+                mainModule.log("使用 Callback 类名: " + callbackClassName);
+
+                urlRequestClassName = configBundle.getString("urlRequest", urlRequestClassName);
+                mainModule.log("使用 UrlRequest 类名: " + urlRequestClassName);
+
+                urlResponseInfoClassName = configBundle.getString("urlResponseInfo", urlResponseInfoClassName);
+                mainModule.log("使用 UrlResponseInfo 类名: " + urlResponseInfoClassName);
+
+                byteBufferClassName = configBundle.getString("byteBuffer", byteBufferClassName);
+                mainModule.log("使用 ByteBuffer 类名: " + byteBufferClassName);
+
+                getUrlMethodName = configBundle.getString("getUrl", getUrlMethodName);
+                mainModule.log("使用 getUrl 方法名: " + getUrlMethodName);
+
+                onReadCompletedMethodName = configBundle.getString("onReadCompleted", onReadCompletedMethodName);
+                mainModule.log("使用 onReadCompleted 方法名: " + onReadCompletedMethodName);
+
+                onSucceededMethodName = configBundle.getString("onSucceeded", onSucceededMethodName);
+                mainModule.log("使用 onSucceeded 方法名: " + onSucceededMethodName);
+            }
+
+            try {
+                Callback = realLoader.loadClass(callbackClassName);
+                mainModule.log("成功找到 Callback 类: " + callbackClassName);
+                UrlRequest = realLoader.loadClass(urlRequestClassName);
+                mainModule.log("成功找到 UrlRequest 类: " + urlRequestClassName);
+                UrlResponseInfo = realLoader.loadClass(urlResponseInfoClassName);
+                mainModule.log("成功找到 UrlResponseInfo 类: " + urlResponseInfoClassName);
+                ByteBuffer = realLoader.loadClass(byteBufferClassName);
+                mainModule.log("成功找到 ByteBuffer 类: " + byteBufferClassName);
 
                 findTargetClass = true;
                 hookCronetCallback(Callback);
@@ -127,23 +158,20 @@ public class MainModule extends XposedModule {
     private static void hookCronetCallback(Class<?> targetClass) {
         try {
             // 缓存一些反射结果
-            getUrl = UrlResponseInfo.getDeclaredMethod("f");
+            getUrl = UrlResponseInfo.getDeclaredMethod(getUrlMethodName);
+            mainModule.log("缓存 getUrl 方法: " + getUrl);
 
-            final String onReadCompletedMethodName = "c"; // onReadCompleted
             Method onReadCompletedMethod = targetClass.getDeclaredMethod(
                     onReadCompletedMethodName, UrlRequest, UrlResponseInfo, ByteBuffer
             );
-            mainModule.log("Hook onReadCompleted: " + onReadCompletedMethod);
             mainModule.hook(onReadCompletedMethod, onReadCompletedHook.class);
-            mainModule.log("Hooking onReadCompleted completed :)");
+            mainModule.log("成功 Hook onReadCompleted: " + onReadCompletedMethodName);
 
-            final String onSucceededMethodName = "f";
             Method onSucceededMethod = targetClass.getDeclaredMethod(
                     onSucceededMethodName, UrlRequest, UrlResponseInfo
             );
-            mainModule.log("Hook onSucceeded: " + onSucceededMethodName);
             mainModule.hook(onSucceededMethod, onSucceededHook.class);
-            mainModule.log("Hooking onSucceeded completed :)");
+            mainModule.log("成功 Hook onSucceeded: " + onSucceededMethodName);
 
         } catch (Exception ex) {
             mainModule.log("Error in finding class method & hooking :: " + ex);
@@ -194,5 +222,4 @@ public class MainModule extends XposedModule {
 
         }
     }
-
 }
