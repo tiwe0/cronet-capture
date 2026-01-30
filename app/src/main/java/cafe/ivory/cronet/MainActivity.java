@@ -25,6 +25,7 @@ public class MainActivity extends Activity {
         put("callback", R.id.cls_callback);
         put("onReadCompleted", R.id.method_onreadcompleted);
         put("onSucceeded", R.id.method_onsucceeded);
+        put("filterUrlPrefix", R.id.et_filter_url_prefix);
     }};
     private Config config;
 

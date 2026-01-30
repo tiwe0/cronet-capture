@@ -23,7 +23,7 @@ public class MainModule extends XposedModule {
     private static MainModule mainModule;
     private static String[] configKeys = {
             "host", "port", "urlRequest", "urlResponseInfo",
-            "getUrl", "byteBuffer", "callback", "onReadCompleted", "onSucceeded"
+            "getUrl", "byteBuffer", "callback", "onReadCompleted", "onSucceeded", "filterUrlPrefix"
     };
 
     // 状态
@@ -50,6 +50,9 @@ public class MainModule extends XposedModule {
     public static Class<?> ByteBuffer;
     public static Class<?> Callback;
 
+    // 过滤器
+    public static String[] FilterUrlPrefix;
+
     public native void initTransport(String host, int port);
     public native void sendData(String tag, ByteBuffer byteBuffer, int position);
     public native void endData(String tag);
@@ -68,8 +71,6 @@ public class MainModule extends XposedModule {
             System.load(path);
             soLoaded = true;
             log("加载 libcronet_forwarder.so 成功");
-            initTransport(host, port);
-            log("初始化延迟连接成功");
         } catch (Exception e) {
             log("加载 libcronet_forwarder.so 失败: " + e.toString());
         }
@@ -135,7 +136,14 @@ public class MainModule extends XposedModule {
 
                 onSucceededMethodName = configBundle.getString("onSucceeded", onSucceededMethodName);
                 mainModule.log("使用 onSucceeded 方法名: " + onSucceededMethodName);
+
+                String FilterUrlPrefixes = configBundle.getString("filterUrlPrefix", "");
+                mainModule.log("设置过滤器: " + FilterUrlPrefixes);
+                FilterUrlPrefix = FilterUrlPrefixes.split(";");
             }
+
+            mainModule.initTransport(host, port);
+            mainModule.log("初始化延迟连接成功");
 
             try {
                 Callback = realLoader.loadClass(callbackClassName);
@@ -185,10 +193,16 @@ public class MainModule extends XposedModule {
         public static onReadCompletedHook beforeInvocation(BeforeHookCallback callback) {
             try {
                 String url = (String) getUrl.invoke(callback.getArgs()[1]);
-                java.nio.ByteBuffer byteBuffer = (java.nio.ByteBuffer) callback.getArgs()[2];
-                int position = byteBuffer.position();
-                mainModule.log("onReadCompleted: " + url);
-                mainModule.sendData(url, byteBuffer, position);
+                for (String prefix : FilterUrlPrefix) {
+                    if (url != null && url.startsWith(prefix)) {
+                        ByteBuffer byteBuffer = (ByteBuffer) callback.getArgs()[2];
+                        int position = byteBuffer.position();
+                        mainModule.log("onReadCompleted: " + url);
+                        mainModule.sendData(url, byteBuffer, position);
+                        return new onReadCompletedHook();
+                    }
+                }
+                mainModule.log("Filtered: " + url);
             } catch (InvocationTargetException | IllegalAccessException e) {
                 mainModule.log(e.toString());
             }
@@ -208,8 +222,14 @@ public class MainModule extends XposedModule {
         public static onSucceededHook beforeInvocation(BeforeHookCallback callback) {
             try {
                 String url = (String) getUrl.invoke(callback.getArgs()[1]);
-                mainModule.log("onSucceeded: " + url);
-                mainModule.endData(url);
+                for (String prefix : FilterUrlPrefix) {
+                    if (url != null && url.startsWith(prefix)) {
+                        mainModule.log("onSucceeded: " + url);
+                        mainModule.endData(url);
+                        return new onSucceededHook();
+                    }
+                }
+                mainModule.log("Filtered: " + url);
             } catch (InvocationTargetException | IllegalAccessException e) {
                 mainModule.log(e.toString());
             }

@@ -18,6 +18,7 @@ public class Config {
         put("callback", "kj5.g");
         put("onReadCompleted", "c");
         put("onSucceeded", "f");
+        put("filterUrlPrefix", "");
     }};
 
     public Config(SharedPreferences sp) {
