@@ -9,6 +9,7 @@ import java.util.Map;
 public class Config {
     public final SharedPreferences sp;
     public static final Map<String, String> DEFAULT_VALUES = new HashMap<String, String>() {{
+        put("magicNumber", "i0v0");
         put("host", "127.0.0.1");
         put("port", "9000");
         put("urlRequest", "org.chromium.net.h0");

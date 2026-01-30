@@ -10,7 +10,6 @@ import androidx.annotation.NonNull;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
@@ -21,14 +20,14 @@ import io.github.libxposed.api.annotations.XposedHooker;
 public class MainModule extends XposedModule {
 
     private static MainModule mainModule;
-    private static String[] configKeys = {
-            "host", "port", "urlRequest", "urlResponseInfo",
-            "getUrl", "byteBuffer", "callback", "onReadCompleted", "onSucceeded"
-    };
+    
+    // 初始化标志，防止重复执行
+    private static boolean hooked;
 
-    // 状态
-    public static boolean findTargetClass = false;
-    private boolean soLoaded = false;
+    public static String packageName = "cafe.ivory.love";
+
+    // 魔法数字
+    public static String magicNumber = "i0v0";
 
     // 转发配置
     public static String host = "127.0.0.1";
@@ -50,9 +49,9 @@ public class MainModule extends XposedModule {
     public static Class<?> ByteBuffer;
     public static Class<?> Callback;
 
-    public native void initTransport(String host, int port);
-    public native void sendData(String tag, ByteBuffer byteBuffer, int position);
-    public native void endData(String tag);
+    public static native void initTransport();
+    public static native void sendData(String tagUrl, ByteBuffer byteBuffer, int position);
+    public static native void endData(String tagUrl);
 
     public MainModule(@NonNull XposedInterface base, @NonNull ModuleLoadedParam param) {
         super(base, param);
@@ -60,32 +59,17 @@ public class MainModule extends XposedModule {
         mainModule = this;
     }
 
-    @SuppressLint("UnsafeDynamicallyLoadedCode")
-    public void loadNativeCronetForward(){
-        if (soLoaded) return;
-        try{
-            String path = getApplicationInfo().nativeLibraryDir + "/libcronet_forwarder.so";
-            System.load(path);
-            soLoaded = true;
-            log("加载 libcronet_forwarder.so 成功");
-            initTransport(host, port);
-            log("初始化延迟连接成功");
-        } catch (Exception e) {
-            log("加载 libcronet_forwarder.so 失败: " + e.toString());
-        }
-    }
-
     @Override
     public void onPackageLoaded(@NonNull PackageLoadedParam param) {
         super.onPackageLoaded(param);
         if (!param.isFirstPackage()) return;
+
         try {
             Method attachMethod = ClassLoader.getSystemClassLoader()
                     .loadClass("android.content.ContextWrapper")
                     .getDeclaredMethod("attachBaseContext", Context.class);
 
             hook(attachMethod, hookAttachContextMethod.class);
-            loadNativeCronetForward();
 
         }catch (NoSuchMethodException e) {
             log("Hook loadClass 失败: " + e.getMessage());
@@ -94,21 +78,44 @@ public class MainModule extends XposedModule {
         }
     }
 
+    @SuppressLint("UnsafeDynamicallyLoadedCode")
+    public void loadNativeCronetForward(){
+        try{
+            String path = getApplicationInfo().nativeLibraryDir + "/libcronet_forwarder.so";
+            System.load(path);
+            log("加载 libcronet_forwarder.so 成功");
+            MainModule.initTransport();
+            log("初始化延迟连接成功");
+        } catch (Exception e) {
+            log("加载 libcronet_forwarder.so 失败: " + e.toString());
+        }
+    }
+
     @XposedHooker
     static public class hookAttachContextMethod implements  XposedInterface.Hooker {
         @AfterInvocation
         public static void afterInvocation(AfterHookCallback callback, hookAttachContextMethod context) {
-            if (findTargetClass) {
-                return;
-            }
 
+            if (hooked) return;
+            hooked = true;
+
+            // 获取 Context 和 ClassLoader
             Context theContext = (Context) callback.getArgs()[0];
             ClassLoader realLoader = theContext.getClassLoader();
-            mainModule.log("attachBaseContext出发点，当前包名: " + theContext.getPackageName());
 
+            // 初始化包名
+            packageName = theContext.getPackageName();
+            mainModule.log("attachBaseContext出发点，当前包名: " + packageName);
+
+            // 通过 ContentProvider 读取配置
             Uri uri = Uri.parse("content://cafe.ivory.cronet.config");
             Bundle configBundle = theContext.getContentResolver().call(uri, "getConfig", null, null);
+
             if (configBundle != null) {
+                // 读取魔术数字
+                magicNumber = configBundle.getString("magicNumber", magicNumber);
+                mainModule.log("使用魔术数字: " + magicNumber);
+
                 // 更新转发配置
                 host = configBundle.getString("host", host);
                 port = Integer.parseInt(configBundle.getString("port", Integer.toString(port)));
@@ -135,22 +142,35 @@ public class MainModule extends XposedModule {
 
                 onSucceededMethodName = configBundle.getString("onSucceeded", onSucceededMethodName);
                 mainModule.log("使用 onSucceeded 方法名: " + onSucceededMethodName);
+            } else {
+                mainModule.log("通过 ContentProvider 获取配置失败，Hook 取消");
+                return;
             }
+
+            mainModule.log("配置加载完毕");
+            mainModule.log("开始加载native库");
+            mainModule.loadNativeCronetForward();
+            mainModule.log("native库加载完毕");
+            mainModule.log("开始查找目标类并Hook");
 
             try {
                 Callback = realLoader.loadClass(callbackClassName);
                 mainModule.log("成功找到 Callback 类: " + callbackClassName);
+
                 UrlRequest = realLoader.loadClass(urlRequestClassName);
                 mainModule.log("成功找到 UrlRequest 类: " + urlRequestClassName);
+
                 UrlResponseInfo = realLoader.loadClass(urlResponseInfoClassName);
                 mainModule.log("成功找到 UrlResponseInfo 类: " + urlResponseInfoClassName);
+
                 ByteBuffer = realLoader.loadClass(byteBufferClassName);
                 mainModule.log("成功找到 ByteBuffer 类: " + byteBufferClassName);
 
-                findTargetClass = true;
                 hookCronetCallback(Callback);
+
+                mainModule.log("初始化完成");
             } catch (ClassNotFoundException e) {
-                mainModule.log(e.toString());
+                mainModule.log("Hook 失败: " + e.toString());
             }
         }
     }
@@ -188,16 +208,11 @@ public class MainModule extends XposedModule {
                 java.nio.ByteBuffer byteBuffer = (java.nio.ByteBuffer) callback.getArgs()[2];
                 int position = byteBuffer.position();
                 mainModule.log("onReadCompleted: " + url);
-                mainModule.sendData(url, byteBuffer, position);
+                MainModule.sendData(url, byteBuffer, position);
             } catch (InvocationTargetException | IllegalAccessException e) {
                 mainModule.log(e.toString());
             }
             return new onReadCompletedHook();
-        }
-
-        @AfterInvocation
-        public static void afterInvocation(AfterHookCallback callback, onReadCompletedHook context) {
-
         }
     }
 
@@ -209,17 +224,11 @@ public class MainModule extends XposedModule {
             try {
                 String url = (String) getUrl.invoke(callback.getArgs()[1]);
                 mainModule.log("onSucceeded: " + url);
-                mainModule.endData(url);
+                MainModule.endData(url);
             } catch (InvocationTargetException | IllegalAccessException e) {
                 mainModule.log(e.toString());
             }
-
             return new onSucceededHook();
-        }
-
-        @AfterInvocation
-        public static void afterInvocation(AfterHookCallback callback, onSucceededHook context) {
-
         }
     }
 }

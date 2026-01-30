@@ -18,7 +18,7 @@ import java.util.Objects;
 public class ConfigProvider extends ContentProvider {
 
     public static final String[] CONFIG_KEYS = {
-            "host", "port", "urlRequest", "urlResponseInfo",
+            "magicNumber", "host", "port", "urlRequest", "urlResponseInfo",
             "getUrl", "byteBuffer", "callback", "onReadCompleted", "onSucceeded"
     };
 

@@ -16,6 +16,7 @@ import android.util.Log;
 public class MainActivity extends Activity {
     private static final String TAG = "cafe.ivory.cronet.MainActivity";
     public static final Map<String, Integer> EDIT_TEXT_IDS = new HashMap<String, Integer>() {{
+        put("magicNumber", R.id.et_magic_number);
         put("host", R.id.et_host);
         put("port", R.id.et_port);
         put("urlRequest", R.id.cls_urlrequest);
@@ -52,6 +53,7 @@ public class MainActivity extends Activity {
                 EditText editText = findViewById(entry.getValue());
                 String value = editText.getText().toString();
                 config.putString(key, value);
+                Log.i(TAG, "保存配置项: " + key + " = " + value);
             }
             Log.i(TAG, "保存配置");
         });
