@@ -50,8 +50,9 @@ public class MainModule extends XposedModule {
     public static Class<?> Callback;
 
     public static native void initTransport();
-    public static native void sendData(String tagUrl, ByteBuffer byteBuffer, int position);
-    public static native void endData(String tagUrl);
+    public static native void sendByteBuffer(String tagUrl, ByteBuffer byteBuffer, int position);
+    public static native void sendString(String tagUrl, String string);
+    public static native void end(String tagUrl);
 
     public MainModule(@NonNull XposedInterface base, @NonNull ModuleLoadedParam param) {
         super(base, param);
@@ -208,7 +209,7 @@ public class MainModule extends XposedModule {
                 java.nio.ByteBuffer byteBuffer = (java.nio.ByteBuffer) callback.getArgs()[2];
                 int position = byteBuffer.position();
                 mainModule.log("onReadCompleted: " + url);
-                MainModule.sendData(url, byteBuffer, position);
+                MainModule.sendByteBuffer(url, byteBuffer, position);
             } catch (InvocationTargetException | IllegalAccessException e) {
                 mainModule.log(e.toString());
             }
@@ -224,7 +225,7 @@ public class MainModule extends XposedModule {
             try {
                 String url = (String) getUrl.invoke(callback.getArgs()[1]);
                 mainModule.log("onSucceeded: " + url);
-                MainModule.endData(url);
+                MainModule.end(url);
             } catch (InvocationTargetException | IllegalAccessException e) {
                 mainModule.log(e.toString());
             }
