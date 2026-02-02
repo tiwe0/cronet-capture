@@ -106,13 +106,18 @@ public class MainModule extends XposedModule {
 
             // 初始化包名
             packageName = theContext.getPackageName();
-            mainModule.log("attachBaseContext出发点，当前包名: " + packageName);
+            mainModule.log("attachBaseContext出发点,当前包名: " + packageName);
 
-            // 通过 ContentProvider 读取配置
+            // 通过 ContentProvider 读取配置,传入包名获取对应配置
             Uri uri = Uri.parse("content://cafe.ivory.cronet.config");
-            Bundle configBundle = theContext.getContentResolver().call(uri, "getConfig", null, null);
+            Bundle configBundle = theContext.getContentResolver().call(uri, "getConfig", packageName, null);
+            mainModule.log("尝试获取包名对应的配置: " + packageName);
 
             if (configBundle != null) {
+                // 显示使用的配置标识
+                String appIdentifier = configBundle.getString("appIdentifier", "未知");
+                mainModule.log("成功获取配置,配置标识: " + appIdentifier);
+                
                 // 读取魔术数字
                 magicNumber = configBundle.getString("magicNumber", magicNumber);
                 mainModule.log("使用魔术数字: " + magicNumber);
@@ -144,7 +149,9 @@ public class MainModule extends XposedModule {
                 onSucceededMethodName = configBundle.getString("onSucceeded", onSucceededMethodName);
                 mainModule.log("使用 onSucceeded 方法名: " + onSucceededMethodName);
             } else {
-                mainModule.log("通过 ContentProvider 获取配置失败，Hook 取消");
+                mainModule.log("通过 ContentProvider 获取配置失败");
+                mainModule.log("包名: " + packageName + " 可能没有对应的配置");
+                mainModule.log("请在 MainActivity 中为此包名创建配置,Hook 取消");
                 return;
             }
 
