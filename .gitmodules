@@ -1,0 +1,6 @@
+[submodule "libs/cronet-forward"]
+	path = libs/cronet-forward
+	url = https://github.com/tiwe0/cronet-forward.git
+[submodule "libs/cronet-receiver"]
+	path = libs/cronet-receiver
+	url = https://github.com/tiwe0/cronet-receiver.git
