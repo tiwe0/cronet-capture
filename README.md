@@ -37,12 +37,21 @@ Cronet Capture 是一个完整的 Android 网络请求捕获解决方案，专�
 ### 🎯 核心特性
 
 - ✅ **Cronet Hook**: 基于 LibXposed API 的现代化 Hook 实现
-- ✅ **高性能转发**: Rust + JNI 实现的零拷贝数据转发
+- ✅ **高性能转发**: Rust + JNI 实现的零拷贝数据转发，手机端无卡顿
 - ✅ **自定义协议**: 基于 Magic Number 的二进制协议，支持流式传输
 - ✅ **异步处理**: Tokio 异步运行时，高并发场景下性能优异
 - ✅ **Redis 存储**: 数据持久化到 Redis Stream，方便后续分析
 - ✅ **路由表**: 灵活的正则表达式路由匹配与转发
 - ✅ **热重载**: 配置文件支持热重载，无需重启服务
+
+### 📦 使用方法
+
+1. 确保你的手机已经安装 lsposed 框架
+2. 下载并安装 CronetForward_1.0.apk
+3. 在 lsposed 中激活该插件，并确保对目标应用开启
+4. 打开 CronetForward 前端配置页进行转发、反混淆等配置
+5. 编译 CronetReceiver 并启动
+6. 打开应用，所有经过 cronet 网络库的流量都会被捕获。
 
 ## 🏗️ 架构设计
 
@@ -143,7 +152,7 @@ rustup target add armv7-linux-androideabi
 export ANDROID_NDK_HOME=/path/to/ndk
 
 # 构建 ARM64
-cargo build --release --target aarch64-linux-android
+cargo ndk build --release --target aarch64-linux-android
 
 # 将生成的 .so 文件复制到 Xposed 项目
 cp target/aarch64-linux-android/release/libcronet_forward.so \
