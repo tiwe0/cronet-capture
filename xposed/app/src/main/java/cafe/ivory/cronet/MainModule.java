@@ -2,10 +2,14 @@ package cafe.ivory.cronet;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -13,14 +17,13 @@ import java.nio.ByteBuffer;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
-import io.github.libxposed.api.annotations.AfterInvocation;
-import io.github.libxposed.api.annotations.BeforeInvocation;
-import io.github.libxposed.api.annotations.XposedHooker;
 
 public class MainModule extends XposedModule {
 
+    private static final String TAG = "CronetCapture";
+
     private static MainModule mainModule;
-    
+
     // 初始化标志，防止重复执行
     private static boolean hooked;
 
@@ -54,189 +57,179 @@ public class MainModule extends XposedModule {
     public static native void sendString(String tagUrl, String string);
     public static native void end(String tagUrl);
 
-    public MainModule(@NonNull XposedInterface base, @NonNull ModuleLoadedParam param) {
-        super(base, param);
-        log("MainModule at " + param.getProcessName());
+    @Override
+    public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
         mainModule = this;
+        logInfo("MainModule at " + param.getProcessName());
     }
 
     @Override
+    @RequiresApi(Build.VERSION_CODES.Q)
     public void onPackageLoaded(@NonNull PackageLoadedParam param) {
-        super.onPackageLoaded(param);
-        if (!param.isFirstPackage()) return;
+        if (!param.isFirstPackage()) {
+            return;
+        }
 
         try {
-            Method attachMethod = ClassLoader.getSystemClassLoader()
-                    .loadClass("android.content.ContextWrapper")
-                    .getDeclaredMethod("attachBaseContext", Context.class);
-
-            hook(attachMethod, hookAttachContextMethod.class);
-
-        }catch (NoSuchMethodException e) {
-            log("Hook loadClass 失败: " + e.getMessage());
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
+            Method attachMethod = ContextWrapper.class.getDeclaredMethod("attachBaseContext", Context.class);
+            hook(attachMethod).intercept(chain -> {
+                Object result = chain.proceed();
+                handleAttachContext(chain);
+                return result;
+            });
+        } catch (NoSuchMethodException e) {
+            logError("Hook attachBaseContext 失败", e);
         }
     }
 
     @SuppressLint("UnsafeDynamicallyLoadedCode")
-    public void loadNativeCronetForward(){
-        try{
-            String path = getApplicationInfo().nativeLibraryDir + "/libcronet_forwarder.so";
+    public void loadNativeCronetForward() {
+        try {
+            String path = getModuleApplicationInfo().nativeLibraryDir + "/libcronet_forwarder.so";
             System.load(path);
-            log("加载 libcronet_forwarder.so 成功");
+            logInfo("加载 libcronet_forwarder.so 成功");
             MainModule.initTransport();
-            log("初始化延迟连接成功");
-        } catch (Exception e) {
-            log("加载 libcronet_forwarder.so 失败: " + e.toString());
+            logInfo("初始化延迟连接成功");
+        } catch (Throwable t) {
+            logError("加载 libcronet_forwarder.so 失败", t);
         }
     }
 
-    @XposedHooker
-    static public class hookAttachContextMethod implements  XposedInterface.Hooker {
-        @AfterInvocation
-        public static void afterInvocation(AfterHookCallback callback, hookAttachContextMethod context) {
+    private static void handleAttachContext(XposedInterface.Chain chain) {
+        if (hooked) {
+            return;
+        }
+        hooked = true;
 
-            if (hooked) return;
-            hooked = true;
-
-            // 获取 Context 和 ClassLoader
-            Context theContext = (Context) callback.getArgs()[0];
+        try {
+            Context theContext = (Context) chain.getArg(0);
             ClassLoader realLoader = theContext.getClassLoader();
 
-            // 初始化包名
             packageName = theContext.getPackageName();
-            mainModule.log("attachBaseContext出发点,当前包名: " + packageName);
+            mainModule.logInfo("attachBaseContext出发点,当前包名: " + packageName);
 
-            // 通过 ContentProvider 读取配置,传入包名获取对应配置
             Uri uri = Uri.parse("content://cafe.ivory.cronet.config");
             Bundle configBundle = theContext.getContentResolver().call(uri, "getConfig", packageName, null);
-            mainModule.log("尝试获取包名对应的配置: " + packageName);
+            mainModule.logInfo("尝试获取包名对应的配置: " + packageName);
 
             if (configBundle != null) {
-                // 显示使用的配置标识
                 String appIdentifier = configBundle.getString("appIdentifier", "未知");
-                mainModule.log("成功获取配置,配置标识: " + appIdentifier);
-                
-                // 读取魔术数字
-                magicNumber = configBundle.getString("magicNumber", magicNumber);
-                mainModule.log("使用魔术数字: " + magicNumber);
+                mainModule.logInfo("成功获取配置,配置标识: " + appIdentifier);
 
-                // 更新转发配置
+                magicNumber = configBundle.getString("magicNumber", magicNumber);
+                mainModule.logInfo("使用魔术数字: " + magicNumber);
+
                 host = configBundle.getString("host", host);
                 port = Integer.parseInt(configBundle.getString("port", Integer.toString(port)));
-                mainModule.log("更新转发配置: " + host + ":" + port);
+                mainModule.logInfo("更新转发配置: " + host + ":" + port);
 
-                // 更新混淆类名和方法名
                 callbackClassName = configBundle.getString("callback", callbackClassName);
-                mainModule.log("使用 Callback 类名: " + callbackClassName);
+                mainModule.logInfo("使用 Callback 类名: " + callbackClassName);
 
                 urlRequestClassName = configBundle.getString("urlRequest", urlRequestClassName);
-                mainModule.log("使用 UrlRequest 类名: " + urlRequestClassName);
+                mainModule.logInfo("使用 UrlRequest 类名: " + urlRequestClassName);
 
                 urlResponseInfoClassName = configBundle.getString("urlResponseInfo", urlResponseInfoClassName);
-                mainModule.log("使用 UrlResponseInfo 类名: " + urlResponseInfoClassName);
+                mainModule.logInfo("使用 UrlResponseInfo 类名: " + urlResponseInfoClassName);
 
                 byteBufferClassName = configBundle.getString("byteBuffer", byteBufferClassName);
-                mainModule.log("使用 ByteBuffer 类名: " + byteBufferClassName);
+                mainModule.logInfo("使用 ByteBuffer 类名: " + byteBufferClassName);
 
                 getUrlMethodName = configBundle.getString("getUrl", getUrlMethodName);
-                mainModule.log("使用 getUrl 方法名: " + getUrlMethodName);
+                mainModule.logInfo("使用 getUrl 方法名: " + getUrlMethodName);
 
                 onReadCompletedMethodName = configBundle.getString("onReadCompleted", onReadCompletedMethodName);
-                mainModule.log("使用 onReadCompleted 方法名: " + onReadCompletedMethodName);
+                mainModule.logInfo("使用 onReadCompleted 方法名: " + onReadCompletedMethodName);
 
                 onSucceededMethodName = configBundle.getString("onSucceeded", onSucceededMethodName);
-                mainModule.log("使用 onSucceeded 方法名: " + onSucceededMethodName);
+                mainModule.logInfo("使用 onSucceeded 方法名: " + onSucceededMethodName);
             } else {
-                mainModule.log("通过 ContentProvider 获取配置失败");
-                mainModule.log("包名: " + packageName + " 可能没有对应的配置");
-                mainModule.log("请在 MainActivity 中为此包名创建配置,Hook 取消");
+                mainModule.logInfo("通过 ContentProvider 获取配置失败");
+                mainModule.logInfo("包名: " + packageName + " 可能没有对应的配置");
+                mainModule.logInfo("请在 MainActivity 中为此包名创建配置,Hook 取消");
                 return;
             }
 
-            mainModule.log("配置加载完毕");
-            mainModule.log("开始加载native库");
+            mainModule.logInfo("配置加载完毕");
+            mainModule.logInfo("开始加载native库");
             mainModule.loadNativeCronetForward();
-            mainModule.log("native库加载完毕");
-            mainModule.log("开始查找目标类并Hook");
+            mainModule.logInfo("native库加载完毕");
+            mainModule.logInfo("开始查找目标类并Hook");
 
-            try {
-                Callback = realLoader.loadClass(callbackClassName);
-                mainModule.log("成功找到 Callback 类: " + callbackClassName);
+            Callback = realLoader.loadClass(callbackClassName);
+            mainModule.logInfo("成功找到 Callback 类: " + callbackClassName);
 
-                UrlRequest = realLoader.loadClass(urlRequestClassName);
-                mainModule.log("成功找到 UrlRequest 类: " + urlRequestClassName);
+            UrlRequest = realLoader.loadClass(urlRequestClassName);
+            mainModule.logInfo("成功找到 UrlRequest 类: " + urlRequestClassName);
 
-                UrlResponseInfo = realLoader.loadClass(urlResponseInfoClassName);
-                mainModule.log("成功找到 UrlResponseInfo 类: " + urlResponseInfoClassName);
+            UrlResponseInfo = realLoader.loadClass(urlResponseInfoClassName);
+            mainModule.logInfo("成功找到 UrlResponseInfo 类: " + urlResponseInfoClassName);
 
-                ByteBuffer = realLoader.loadClass(byteBufferClassName);
-                mainModule.log("成功找到 ByteBuffer 类: " + byteBufferClassName);
+            ByteBuffer = realLoader.loadClass(byteBufferClassName);
+            mainModule.logInfo("成功找到 ByteBuffer 类: " + byteBufferClassName);
 
-                hookCronetCallback(Callback);
-
-                mainModule.log("初始化完成");
-            } catch (ClassNotFoundException e) {
-                mainModule.log("Hook 失败: " + e.toString());
-            }
+            hookCronetCallback(Callback);
+            mainModule.logInfo("初始化完成");
+        } catch (Throwable t) {
+            mainModule.logError("Hook 失败", t);
         }
     }
 
     private static void hookCronetCallback(Class<?> targetClass) {
         try {
-            // 缓存一些反射结果
             getUrl = UrlResponseInfo.getDeclaredMethod(getUrlMethodName);
-            mainModule.log("缓存 getUrl 方法: " + getUrl);
+            mainModule.logInfo("缓存 getUrl 方法: " + getUrl);
 
             Method onReadCompletedMethod = targetClass.getDeclaredMethod(
                     onReadCompletedMethodName, UrlRequest, UrlResponseInfo, ByteBuffer
             );
-            mainModule.hook(onReadCompletedMethod, onReadCompletedHook.class);
-            mainModule.log("成功 Hook onReadCompleted: " + onReadCompletedMethodName);
+            mainModule.hook(onReadCompletedMethod).intercept(chain -> {
+                onReadCompleted(chain);
+                return chain.proceed();
+            });
+            mainModule.logInfo("成功 Hook onReadCompleted: " + onReadCompletedMethodName);
 
             Method onSucceededMethod = targetClass.getDeclaredMethod(
                     onSucceededMethodName, UrlRequest, UrlResponseInfo
             );
-            mainModule.hook(onSucceededMethod, onSucceededHook.class);
-            mainModule.log("成功 Hook onSucceeded: " + onSucceededMethodName);
+            mainModule.hook(onSucceededMethod).intercept(chain -> {
+                onSucceeded(chain);
+                return chain.proceed();
+            });
+            mainModule.logInfo("成功 Hook onSucceeded: " + onSucceededMethodName);
 
-        } catch (Exception ex) {
-            mainModule.log("Error in finding class method & hooking :: " + ex);
+        } catch (Throwable t) {
+            mainModule.logError("Error in finding class method & hooking", t);
         }
     }
 
-    /// Hook Cronet 每次读取完数据  方法 "c"
-    @XposedHooker
-    static public class onReadCompletedHook implements XposedInterface.Hooker {
-        @BeforeInvocation
-        public static onReadCompletedHook beforeInvocation(BeforeHookCallback callback) {
-            try {
-                String url = (String) getUrl.invoke(callback.getArgs()[1]);
-                java.nio.ByteBuffer byteBuffer = (java.nio.ByteBuffer) callback.getArgs()[2];
-                int position = byteBuffer.position();
-                mainModule.log("onReadCompleted: " + url);
-                MainModule.sendByteBuffer(url, byteBuffer, position);
-            } catch (InvocationTargetException | IllegalAccessException e) {
-                mainModule.log(e.toString());
-            }
-            return new onReadCompletedHook();
+    private static void onReadCompleted(XposedInterface.Chain chain) {
+        try {
+            String url = (String) getUrl.invoke(chain.getArg(1));
+            java.nio.ByteBuffer byteBuffer = (java.nio.ByteBuffer) chain.getArg(2);
+            int position = byteBuffer.position();
+            mainModule.logInfo("onReadCompleted: " + url);
+            MainModule.sendByteBuffer(url, byteBuffer, position);
+        } catch (InvocationTargetException | IllegalAccessException e) {
+            mainModule.logError("onReadCompleted hook 失败", e);
         }
     }
 
-    /// Hook Cronet 请求完全结束  方法 "f"
-    @XposedHooker
-    static public class onSucceededHook implements  XposedInterface.Hooker {
-        @BeforeInvocation
-        public static onSucceededHook beforeInvocation(BeforeHookCallback callback) {
-            try {
-                String url = (String) getUrl.invoke(callback.getArgs()[1]);
-                mainModule.log("onSucceeded: " + url);
-                MainModule.end(url);
-            } catch (InvocationTargetException | IllegalAccessException e) {
-                mainModule.log(e.toString());
-            }
-            return new onSucceededHook();
+    private static void onSucceeded(XposedInterface.Chain chain) {
+        try {
+            String url = (String) getUrl.invoke(chain.getArg(1));
+            mainModule.logInfo("onSucceeded: " + url);
+            MainModule.end(url);
+        } catch (InvocationTargetException | IllegalAccessException e) {
+            mainModule.logError("onSucceeded hook 失败", e);
         }
+    }
+
+    private void logInfo(String message) {
+        log(Log.INFO, TAG, message);
+    }
+
+    private void logError(String message, Throwable throwable) {
+        log(Log.ERROR, TAG, message, throwable);
     }
 }

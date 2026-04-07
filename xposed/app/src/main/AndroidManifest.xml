@@ -12,20 +12,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ModernXposedApiDemo"
-        android:extractNativeLibs="true"
         tools:targetApi="31" >
 
-        <meta-data
-            android:name="xposedminversion"
-            android:value="100"/>
 
-        <meta-data
-            android:name="xposeddescription"
-            android:value="a simple cronet capture" />
 
-        <meta-data
-            android:name="xposedmodule"
-            android:value="true" />
 
         <activity
             android:name=".MainActivity"
